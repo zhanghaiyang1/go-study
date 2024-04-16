@@ -12,7 +12,7 @@ func main(){
 	block := make(chan struct{})
 
 	go func ()  {
-		time.Sleep(time.Second)
+		time.Sleep(time.Second * 1)
 		// block <- struct{}{}
 		close(block)
 	}()
