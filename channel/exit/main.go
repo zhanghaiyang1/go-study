@@ -2,7 +2,10 @@ package main
 
 import (
 	"fmt"
-	"time"
+	// "time"
+
+	"github.com/gogf/gf/v2/frame/g"
+	"github.com/gogf/gf/v2/os/gctx"
 )
 
 /*
@@ -10,10 +13,11 @@ import (
 */
 func main(){
 	block := make(chan struct{})
-
+	ctx := gctx.New()
 	go func ()  {
-		time.Sleep(time.Second * 1)
-		// block <- struct{}{}
+		// time.Sleep(time.Second * 1)
+		g.Log().Infof(ctx, "子")
+		block <- struct{}{}
 		close(block)
 	}()
 	<- block

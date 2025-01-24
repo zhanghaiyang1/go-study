@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"time"
+	// "time"
 )
 
 /*
@@ -13,7 +13,7 @@ func main(){
 
 	go odd(block)
 	go even(block)
-	time.Sleep(time.Second)
+	// time.Sleep(time.Second)
 	fmt.Println("Done")
 }
 func odd(block chan struct{}){

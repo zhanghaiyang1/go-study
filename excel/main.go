@@ -15,13 +15,13 @@ var (
 )
 
 func init() {
-	Db, err = sql.Open("mysql", "chd_go:wN6vP9Z9#hs)_894vg0rjp@tcp(rm-m5edp40r7hg34oiu8to.mysql.rds.aliyuncs.com:3306)/insurance")
+	Db, err = sql.Open("mysql", "chd_go:wN6vP9Z9#hs)_894vg0rjp@tcp(47.104.43.77:3306)/insurance")
 	if err != nil {
 		panic(err.Error())
 	}
 }
 func main() {
-	f, err := excelize.OpenFile("/Users/harry/Downloads/pa.xlsx")
+	f, err := excelize.OpenFile("/Users/harry/Downloads/07.xlsx")
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -34,7 +34,7 @@ func main() {
 	}()
 
 	// Get all the rows in the Sheet1.
-	rows, err := f.GetRows("行业类型映射")
+	rows, err := f.GetRows("Sheet1")
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -42,7 +42,7 @@ func main() {
 
 	one, two, three, four, five, six := "", "", "", "", "", ""
 	for j, row := range rows {
-		if j < 2 {
+		if j < 1 {
 			continue
 		}
 		for i, colCell := range row {
