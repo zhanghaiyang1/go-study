@@ -1,14 +1,18 @@
 package main
 
-import "fmt"
+import (
+
+	"fmt"
+	"strings"
+)
 
 
 func main (){
-	a := 1
-	switch a{
-	case 1:
-		fmt.Println("one")
-	case 2:
-		fmt.Println("two")
-	}
+	url := "https://www.qbao100.com/some/path"
+
+    if strings.HasPrefix(url, "https://www.qbao100.com") {
+        fmt.Println("The URL starts with https://www.qbao100.com")
+    } else {
+        fmt.Println("The URL does not start with https://www.qbao100.com")
+    }
 }
