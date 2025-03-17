@@ -21,7 +21,7 @@ func init() {
 	}
 }
 func main() {
-	f, err := excelize.OpenFile("/Users/harry/Downloads/07.xlsx")
+	f, err := excelize.OpenFile("/Users/harry/Downloads/customer.xlsx")
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -34,7 +34,7 @@ func main() {
 	}()
 
 	// Get all the rows in the Sheet1.
-	rows, err := f.GetRows("Sheet1")
+	rows, err := f.GetRows("券")
 	if err != nil {
 		fmt.Println(err)
 		return
