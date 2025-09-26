@@ -7,7 +7,7 @@ import (
 	"encoding/base64"
 	
 	"fmt"
-	"study/aes/config"
+	"study/signature/aes_cbc/config"
 )
 
 var key = []byte(config.REQ_KEY)
