@@ -1,168 +1,109 @@
 package main
 
 import (
-	"crypto/tls"
+	"bytes"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/des"
+	"crypto/sha1"
+	"encoding/base64"
 	"fmt"
-	"io"
-	"net/mail"
-	"net/smtp"
-	"net/textproto"
-	"os"
 	"strings"
-	"time"
 
-	"github.com/jordan-wright/email"
+	"github.com/shopspring/decimal"
 )
 
+// JDAZAes 工具类
+type JDAZAes struct{}
+
+// getRawKey 严格匹配 Java KeyGenerator.getInstance("AES") + SHA1PRNG 的实现
+// 逻辑：SHA1(SHA1(seed)) 取前 16 字节
+func (j *JDAZAes) getRawKey(seed []byte) []byte {
+	h := sha1.New()
+	h.Write(seed)
+	firstHash := h.Sum(nil)
+
+	h2 := sha1.New()
+	h2.Write(firstHash)
+	secondHash := h2.Sum(nil)
+
+	return secondHash[:16]
+}
+
+// Des3EncodeCbc 生成 seed (3DES CBC)
+func (j *JDAZAes) Des3EncodeCbc(userCode, publicKey string) (string, error) {
+	iv := []byte{2, 3, 4, 5, 6, 7, 8, 9}
+	keyRaw := userCode + publicKey
+
+	// Java StringUtils.leftPad 逻辑
+	if len(keyRaw) < 24 {
+		fillChar := publicKey[:1]
+		keyRaw = strings.Repeat(fillChar, 24-len(keyRaw)) + keyRaw
+	}
+	keyBytes := []byte(keyRaw)[:24]
+
+	block, err := des.NewTripleDESCipher(keyBytes)
+	if err != nil {
+		return "", err
+	}
+
+	plainData := []byte(userCode)
+	paddedData := pkcs5Padding(plainData, block.BlockSize())
+	
+	blockMode := cipher.NewCBCEncrypter(block, iv)
+	cipherText := make([]byte, len(paddedData))
+	blockMode.CryptBlocks(cipherText, paddedData)
+
+	return base64.StdEncoding.EncodeToString(cipherText), nil
+}
+
+// EncryptBase64 AES ECB 加密
+func (j *JDAZAes) EncryptBase64(seed, content string) (string, error) {
+	key := j.getRawKey([]byte(seed))
+	
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return "", err
+	}
+
+	plainText := []byte(content)
+	paddedText := pkcs5Padding(plainText, block.BlockSize())
+	
+	// AES ECB 模式加密 (Java 默认)
+	cipherText := make([]byte, len(paddedText))
+	for bs, be := 0, block.BlockSize(); bs < len(paddedText); bs, be = bs+block.BlockSize(), be+block.BlockSize() {
+		block.Encrypt(cipherText[bs:be], paddedText[bs:be])
+	}
+
+	return base64.StdEncoding.EncodeToString(cipherText), nil
+}
+
+// PKCS5 填充
+func pkcs5Padding(ciphertext []byte, blockSize int) []byte {
+	padding := blockSize - len(ciphertext)%blockSize
+	padtext := bytes.Repeat([]byte{byte(padding)}, padding)
+	return append(ciphertext, padtext...)
+}
+
 func main() {
-	// 配置信息
-	username := "ocean@bbyfu.cn"
-	password := "haiyang@1017"
-	replyto := username
-	// 显示的To收信地址
-	rcptto := []string{"z_haiyang@163.com"}
-	//# 显示的Cc收信地址
-	rcptcc := []string{"zhangna@bbyfu.cn", "kuangwenjing@bbyfu.cn"}
-	//# Bcc收信地址，密送人不会显示在邮件上，但可以收到邮件
-	rcptbcc := []string{"z_jiale2022@163.com"}
-	receivers := append(rcptto, rcptcc...)
-	receivers = append(receivers, rcptbcc...)
+	price := int64(1119)
 
-	// 创建邮件
-	e := email.NewEmail()
-	e.From = "\"自定义发信昵称\" <" + username + ">"
-	e.To = rcptto
-	e.Cc = rcptcc
-	e.Bcc = rcptbcc
-	e.ReplyTo = []string{replyto}
-	e.Subject = "自定义信件主题"
+	invoiceAmount, _ := decimal.NewFromInt(price).Div(decimal.NewFromInt(100)).Float64()
+	fmt.Println("InvoiceAmount:", invoiceAmount)
+	// 预期: 11.19
+	userCode := "AC600001_01"
+	publicKey := "bc0TYXab4UjcZiOtX9XpdQ"
+	plainText := "AAA加密前的明文内容BBB"
 
-	// 设置Message-ID
-	e.Headers = make(textproto.MIMEHeader)
-	e.Headers.Set("Message-ID", generateMessageID())
-	e.Headers.Set("Return-Path", "test@example.net")
+	utils := &JDAZAes{}
 
-	// 设置HTML内容
-	e.HTML = []byte("自定义HTML超文本部分")
+	// 1. 生成 Seed
+	seed, _ := utils.Des3EncodeCbc(userCode, publicKey)
+	fmt.Println("Seed:", seed) 
+	// 预期: 9yMoKeEB+W2jIf2T0Z7qXg==
 
-	// 可选：设置纯文本内容
-	// e.Text = []byte("自定义TEXT纯文本部分")
-
-	// 可选：添加本地附件
-	// file, err := os.Open("test.jpg")
-	// if err != nil {
-	// 	fmt.Println("打开附件失败:", err)
-	// 	return
-	// }
-	// defer file.Close()
-	// e.Attach(file, "test.jpg", "image/jpeg")
-
-	// 可选：添加URL附件
-	// e.AttachFile("https://example.oss-cn-shanghai.aliyuncs.com/xxxxxxxxxxx.png")
-
-	// 发送邮件
-	err := sendEmail(e, username, password, "smtp.qiye.aliyun.com", 25)
-	if err != nil {
-		fmt.Println("邮件发送失败:", err)
-		return
-	}
-	fmt.Println("邮件发送成功！")
-}
-
-// sendEmail 发送邮件
-func sendEmail(e *email.Email, username, password, host string, port int) error {
-	addr := fmt.Sprintf("%s:%d", host, port)
-
-	// 普通SMTP连接
-	if port == 25 {
-		return e.Send(addr, smtp.PlainAuth("", username, password, host))
-	}
-
-	// SSL连接 (端口465)
-	if port == 465 {
-		return e.SendWithTLS(addr, smtp.PlainAuth("", username, password, host), &tls.Config{
-			ServerName: host,
-		})
-	}
-
-	return fmt.Errorf("不支持的端口: %d", port)
-}
-
-// generateMessageID 生成Message-ID
-func generateMessageID() string {
-	return fmt.Sprintf("<%d.%d@example.com>", time.Now().UnixNano(), os.Getpid())
-}
-
-// 以下为不使用第三方库的原生实现示例（可选）
-func sendEmailNative() error {
-	from := mail.Address{Name: "自定义发信昵称", Address: "sender@example.com"}
-	to := []mail.Address{
-		{Name: "", Address: "address1@example.net"},
-		{Name: "", Address: "address2@example.net"},
-	}
-
-	// 设置邮件头
-	headers := make(textproto.MIMEHeader)
-	headers.Set("From", from.String())
-	headers.Set("To", formatAddresses(to))
-	headers.Set("Subject", "自定义信件主题")
-	headers.Set("Message-ID", generateMessageID())
-	headers.Set("Date", time.Now().Format(time.RFC1123Z))
-
-	// 创建邮件内容
-	body := "自定义HTML超文本部分"
-
-	// 连接到SMTP服务器
-	client, err := smtp.Dial("smtp.qiye.aliyun.com:25")
-	if err != nil {
-		return err
-	}
-	defer client.Close()
-
-	// 认证
-	if err := client.Auth(smtp.PlainAuth("", "username", "password", "smtp.qiye.aliyun.com")); err != nil {
-		return err
-	}
-
-	// 设置发件人
-	if err := client.Mail(from.Address); err != nil {
-		return err
-	}
-
-	// 设置收件人
-	toAddresses := make([]string, len(to))
-	for i, addr := range to {
-		toAddresses[i] = addr.Address
-	}
-	for _, addr := range toAddresses {
-		if err := client.Rcpt(addr); err != nil {
-			return err
-		}
-	}
-
-	// 发送数据
-	w, err := client.Data()
-	if err != nil {
-		return err
-	}
-
-	// 写入邮件头
-	for k, v := range headers {
-		fmt.Fprintf(w, "%s: %s\r\n", k, strings.Join(v, ", "))
-	}
-	fmt.Fprintf(w, "\r\n")
-	// 写入邮件体
-	io.WriteString(w, body)
-
-	w.Close()
-	return nil
-}
-
-// formatAddresses 格式化地址列表
-func formatAddresses(addrs []mail.Address) string {
-	var formatted []string
-	for _, addr := range addrs {
-		formatted = append(formatted, addr.String())
-	}
-	return strings.Join(formatted, ", ")
+	// 2. 加密
+	cipherText, _ := utils.EncryptBase64(seed, plainText)
+	fmt.Println("CipherText:", cipherText)
+	// 预期: N0Cfs3ta2/tG7kLJE/Ev8KQfJwqNnIk9X5+JTL1rOMU=
 }
